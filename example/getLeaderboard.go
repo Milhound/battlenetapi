@@ -1,4 +1,4 @@
-package main
+package example
 
 import (
 	"encoding/json"
@@ -7,38 +7,19 @@ import (
 
 	"battlenetapi/battlenet"
 	"battlenetapi/wow/gamedata"
-
-	"github.com/joho/godotenv"
 )
 
-func main() {
-	// Load the .env file
-	err := godotenv.Load(".env")
-	if err != nil {
-		fmt.Println("Error loading .env file")
-	}
-
-	// Authenticate with the BattleNet API
-	clientID := os.Getenv("CLIENT_ID")
-	clientSecret := os.Getenv("CLIENT_SECRET")
-	credentials := battlenet.GetAccessToken(clientID, clientSecret)
-
+func GetLeaderboard(params battlenet.BattleNetAPIParams, bracket string) {
 	// Get the current PVP season
-	params := battlenet.BattleNetAPIParams{
-		UrlOrEndpoint: gamedata.PvpSeasonIndexEndpoint,
-		Namespace:     battlenet.DYNAMIC,
-		Region:        battlenet.US,
-		Token:         credentials.AccessToken,
-	}
-	response := battlenet.BattleNetAPI(params)
+	response := battlenet.BattleNetAPI(params, nil)
 	var pvpIndex gamedata.PvpSeasonIndexAPI
 	json.Unmarshal(response, &pvpIndex)
 
 	// Get the leaderboards for the current PVP season and Bracket
-	shuffleOrBlitz := fmt.Sprintf("blitz-%s", gamedata.ClassDemonHunterHavoc)
-	params.UrlOrEndpoint = fmt.Sprintf(gamedata.PvpLeaderboardEndpoint, pvpIndex.CurrentSeason.ID, shuffleOrBlitz)
-	response = battlenet.BattleNetAPI(params)
-	file, err := os.Create(fmt.Sprintf("pvp_season_%d_leaderboard-bracket_%s.json", pvpIndex.CurrentSeason.ID, shuffleOrBlitz))
+
+	params.UrlOrEndpoint = fmt.Sprintf(gamedata.PvpLeaderboardEndpoint, pvpIndex.CurrentSeason.ID, bracket)
+	response = battlenet.BattleNetAPI(params, nil)
+	file, err := os.Create(fmt.Sprintf("pvp_season_%d_leaderboard-bracket_%s.json", pvpIndex.CurrentSeason.ID, bracket))
 	if err != nil {
 		fmt.Println("Error creating file:", err)
 		return

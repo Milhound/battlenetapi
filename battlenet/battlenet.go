@@ -33,59 +33,82 @@ type BattleNetAPIParams struct {
 	Namespace     string
 	Region        string
 	Token         string
+	Options       interface{}
+}
+
+type URLFormatter interface {
+	FormatURL(baseURL, endpoint, namespace, region string, options interface{}) string
 }
 
 func GetAccessToken(clientID string, clientSecret string) clientCredentialsAPI {
 	const authenticationUrl string = "https://oauth.battle.net/token"
 	resp, err := http.Post(authenticationUrl, "application/x-www-form-urlencoded", strings.NewReader(fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s", clientID, clientSecret)))
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error creating request:", err)
+		return clientCredentialsAPI{}
 	}
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error reading response body:", err)
+		return clientCredentialsAPI{}
 	}
 	if resp.StatusCode != 200 {
-		fmt.Println(resp.Status)
-		panic("Failed to get access token")
+		fmt.Println("Error response from server:", resp.Status)
+		return clientCredentialsAPI{}
 	}
 	var credentials clientCredentialsAPI
 	err = json.Unmarshal(respBody, &credentials)
 	if err != nil {
-		fmt.Println(err)
-		panic("Failed to parse access token response")
+		fmt.Println("Error parsing response body:", err)
+		return clientCredentialsAPI{}
 	}
-	fmt.Println("Access Token: ", credentials.AccessToken)
+	fmt.Println("Access Token:", credentials.AccessToken)
 	return credentials
 }
 
-func BattleNetAPI(params BattleNetAPIParams) []byte {
+func BattleNetAPI(params BattleNetAPIParams, formatter URLFormatter) []byte {
+	if params.UrlOrEndpoint == "" || params.Namespace == "" || params.Region == "" || params.Token == "" {
+		fmt.Println("Invalid parameters")
+		return nil
+	}
+
 	var requestURL string
 	if strings.HasPrefix(params.UrlOrEndpoint, "http") {
 		requestURL = params.UrlOrEndpoint
 	} else {
-		var baseURL string = fmt.Sprintf("https://%s.api.blizzard.com", params.Region)
-		requestURL = fmt.Sprintf("%s%s?namespace=%s-%s", baseURL, params.UrlOrEndpoint, params.Namespace, params.Region)
+		baseURL := fmt.Sprintf("https://%s.api.blizzard.com", params.Region)
+		if formatter != nil {
+			requestURL = formatter.FormatURL(baseURL, params.UrlOrEndpoint, params.Namespace, params.Region, params.Options)
+		} else {
+			requestURL = fmt.Sprintf("%s%s?namespace=%s-%s", baseURL, params.UrlOrEndpoint, params.Namespace, params.Region)
+		}
 	}
-	fmt.Println(requestURL)
+
+	fmt.Println("Request URL:", requestURL)
 	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error creating request:", err)
+		return nil
 	}
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", params.Token))
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error making request:", err)
+		return nil
 	}
 	defer resp.Body.Close()
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error reading response body:", err)
+		return nil
 	}
 	if resp.StatusCode != 200 {
-		fmt.Println(resp.Status)
-		panic("Failed to process the request")
+		fmt.Printf("Error response from server: %s\n", resp.Status)
+		return nil
 	}
-	return (respBody)
+
+	return respBody
 }
